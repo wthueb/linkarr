@@ -1,0 +1,13 @@
+node_modules/
+dist/
+public/icons/
+artifacts/
+.direnv/
+.env
+.env.*
+!.env.example
+playwright-report/
+test-results/
+coverage/
+result
+.DS_Store
