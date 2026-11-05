@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+      - "!release-please--**"
+    tags:
+      - "v*"
+  pull_request: {}
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b
+        with:
+          nix_path: nixpkgs=channel:nixpkgs-unstable
+      - name: Conventional PR title
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: nix develop --command node scripts/check-pr-title.mjs
+      - name: Locked dependencies
+        run: nix develop --command pnpm install --frozen-lockfile
+      - name: Formatting, lint, types, unit tests, and build
+        run: nix develop --command pnpm check
+      - name: Browser integration tests
+        run: nix develop --command pnpm test:e2e
+      - name: Dependency audit
+        run: nix develop --command pnpm audit --audit-level=high
+      - name: Nix and treefmt checks
+        run: nix flake check
+      - name: Package extension
+        run: nix develop --command pnpm package
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linkarr-extension
+          path: artifacts/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: steps.release.outputs.release_created == 'true'
+        with:
+          name: linkarr-extension
+          path: artifacts
+      - name: Attach extension ZIP
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh release upload "$RELEASE_TAG" artifacts/*.zip
