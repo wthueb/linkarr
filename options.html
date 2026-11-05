@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Linkarr · Settings</title>
+    <script type="module" src="/src/options/index.ts"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="page-header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">↗</span> Linkarr
+          <span class="version"></span>
+        </div>
+        <p class="eyebrow">YOUR LIBRARIES, ONE CLICK AWAY</p>
+        <h1>A place for every version.</h1>
+        <p class="intro">
+          Connect your Radarr and Sonarr instances. Open titles you already
+          have, or find the ones you don’t.
+        </p>
+      </header>
+      <form id="settings-form">
+        <section class="toolbar" aria-label="Extension preferences">
+          <label class="toggle"
+            ><input id="enabled" type="checkbox" /> Enable page links</label
+          >
+          <span class="muted">IMDb · TMDB · TVDB · MDBList</span>
+        </section>
+        <div class="section-heading">
+          <div>
+            <h2>Your instances</h2>
+            <p class="muted">
+              Separate 1080p and 4K libraries? Give each a name and its own
+              icon.
+            </p>
+          </div>
+          <button id="add-instance" type="button" class="secondary">
+            + Add instance
+          </button>
+        </div>
+        <div id="instances"></div>
+        <p id="empty" class="empty">
+          No instances yet. Add your first Radarr or Sonarr connection to get
+          started.
+        </p>
+        <footer class="save-bar">
+          <p id="status" role="status" aria-live="polite">
+            Settings are stored on this device, not synced.
+          </p>
+          <button id="save" type="submit">Save settings</button>
+        </footer>
+      </form>
+      <aside class="privacy">
+        <h2>Just your browser and your servers.</h2>
+        <p>
+          API keys stay in the extension’s local storage and are never sent to
+          content pages. Linkarr only reads your libraries; it never adds,
+          downloads, plays, or deletes media. A click opens the existing title’s
+          detail page or the add screen in a new tab. Links work immediately
+          without an API key; with a key, library checks quietly update links in
+          the background.
+        </p>
+        <p>
+          Access is requested only for the server origins you configure. Custom
+          icons are fetched once and cached locally. Use HTTPS when your
+          instances are not on a trusted local network.
+        </p>
+      </aside>
+    </main>
+    <template id="instance-template">
+      <fieldset class="instance-card">
+        <legend class="visually-hidden">Instance</legend>
+        <div class="card-header">
+          <span class="instance-preview" aria-hidden="true">R</span
+          ><strong class="card-title">New instance</strong
+          ><label class="toggle"
+            ><input name="enabled" type="checkbox" checked /> Enabled</label
+          ><button
+            type="button"
+            class="quiet move-up"
+            aria-label="Move instance up"
+          >
+            ↑</button
+          ><button
+            type="button"
+            class="quiet move-down"
+            aria-label="Move instance down"
+          >
+            ↓</button
+          ><button type="button" class="quiet remove">Remove</button>
+        </div>
+        <div class="fields">
+          <label
+            >Display name<input
+              name="name"
+              required
+              maxlength="80"
+              placeholder="Radarr · 4K"
+              autocomplete="off"
+          /></label>
+          <label
+            >Service<select name="service">
+              <option value="radarr">Radarr · Movies</option>
+              <option value="sonarr">Sonarr · TV shows</option>
+            </select></label
+          >
+          <label class="wide"
+            >Instance URL<input
+              name="baseUrl"
+              type="url"
+              required
+              maxlength="2048"
+              placeholder="https://radarr.example.com or http://localhost:7878/radarr"
+              autocomplete="off"
+            /><span class="hint"
+              >Include the reverse-proxy base path, if any. No trailing /add/new
+              or /api.</span
+            ></label
+          >
+          <label class="wide"
+            >API key (optional)<input
+              name="apiKey"
+              type="password"
+              maxlength="256"
+              autocomplete="off"
+              spellcheck="false"
+            /><span class="hint"
+              >Enables automatic links to existing titles. Leave blank for
+              add/search links only. Find it under Settings → General →
+              Security.</span
+            ></label
+          >
+        </div>
+        <details class="custom-icon">
+          <summary>Custom icon</summary>
+          <p class="hint">
+            Use a 4K icon, a personal badge, or any HTTP(S) image URL. Loaded
+            icons are converted to a small PNG; originals are not requested
+            while you browse.
+          </p>
+          <label
+            >Icon URL<input
+              name="iconUrl"
+              type="url"
+              maxlength="2048"
+              placeholder="https://example.com/radarr-4k.png"
+              autocomplete="off"
+          /></label>
+          <div class="icon-actions">
+            <button type="button" class="secondary load-icon">Load icon</button
+            ><button type="button" class="quiet reset-icon">
+              Use default icon
+            </button>
+          </div>
+        </details>
+        <div class="card-footer">
+          <button type="button" class="secondary test-connection">
+            Test connection</button
+          ><span class="card-status" role="status" aria-live="polite"></span>
+        </div>
+      </fieldset>
+    </template>
+  </body>
+</html>
