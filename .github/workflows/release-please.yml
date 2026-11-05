@@ -1,0 +1,60 @@
+name: release-please
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071
+        id: release
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    if: needs.release-please.outputs.release_created == 'true'
+    needs: release-please
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b
+        with:
+          nix_path: nixpkgs=channel:nixpkgs-unstable
+      - name: Locked dependencies
+        run: nix develop --command pnpm install --frozen-lockfile
+      - name: Formatting, lint, types, unit tests, and build
+        run: nix develop --command pnpm check
+      - name: Browser integration tests
+        run: nix develop --command pnpm test:e2e
+      - name: Dependency audit
+        run: nix develop --command pnpm audit --audit-level=high
+      - name: Nix and treefmt checks
+        run: nix flake check
+      - name: Package extension
+        run: nix develop --command pnpm package
+      - name: Attach extension ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release upload "$RELEASE_TAG" artifacts/*.zip

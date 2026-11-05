@@ -1,0 +1,38 @@
+{
+  "name": "linkarr",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Chrome MV3 links from movie and TV pages to your Radarr and Sonarr libraries.",
+  "type": "module",
+  "packageManager": "pnpm@10.34.7",
+  "engines": {
+    "node": ">=24.21.0 <25"
+  },
+  "scripts": {
+    "dev": "vite build --watch --mode content",
+    "dev:ui": "vite build --watch",
+    "build": "node scripts/generate-icons.mjs && tsc --noEmit && vite build && vite build --mode content && vite build --mode background && node scripts/verify-build.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "treefmt",
+    "format:check": "biome format . && prettier --check '**/*.{md,yml,yaml,html}'",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "package": "pnpm build && node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@playwright/test": "1.64.1",
+    "@types/chrome": "0.3.7",
+    "@types/node": "24.10.0",
+    "fflate": "0.8.3",
+    "happy-dom": "21.0.4",
+    "prettier": "3.9.10",
+    "typescript": "7.0.2",
+    "vite": "8.3.6",
+    "vitest": "5.1.0"
+  }
+}

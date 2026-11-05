@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Linkarr</title>
+    <script type="module" src="/src/popup/index.ts"></script>
+  </head>
+  <body class="popup">
+    <main>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">↗</span> Linkarr
+        <span class="version"></span>
+      </div>
+      <p class="muted">Your movies and shows, connected.</p>
+      <label class="toggle"
+        ><input id="enabled" type="checkbox" /> Enable page links</label
+      >
+      <div id="shortcuts" class="shortcuts"></div>
+      <p id="status" class="muted" role="status" aria-live="polite"></p>
+      <button id="settings" type="button">Manage instances</button>
+    </main>
+  </body>
+</html>
