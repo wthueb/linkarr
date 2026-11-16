@@ -1,6 +1,6 @@
 {
   "name": "linkarr",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "license": "MIT",
   "description": "Chrome MV3 links from movie and TV pages to Radarr, Sonarr, and Seerr.",
