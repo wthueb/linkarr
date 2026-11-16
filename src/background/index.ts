@@ -1,6 +1,7 @@
 import { pageLinks } from "../shared/links";
 import { parseMedia, supportedPage } from "../shared/media";
 import { errorMessage } from "../shared/messages";
+import { supportsMedia } from "../shared/services";
 import {
   isRecord,
   loadSettings,
@@ -9,6 +10,7 @@ import {
   SETTINGS_KEY,
 } from "../shared/settings";
 import { api, findExistingDestination } from "./arr";
+import { findSeerrDestination, testSeerrConnection } from "./seerr";
 
 const ready = chrome.storage.local.setAccessLevel({
   accessLevel: "TRUSTED_CONTEXTS",
@@ -36,6 +38,11 @@ async function handle(message: unknown, sender: chrome.runtime.MessageSender): P
     });
     const instance = settings.instances[0];
     if (!instance) throw new Error("Missing instance.");
+    const permitted = await chrome.permissions.contains({
+      origins: [`${new URL(instance.baseUrl).origin}/*`],
+    });
+    if (!permitted) throw new Error("Server host access was not granted. Links still work.");
+    if (instance.service === "seerr") return testSeerrConnection(instance);
     const status = await api(instance, "system/status");
     if (
       !isRecord(status) ||
@@ -56,13 +63,18 @@ async function handle(message: unknown, sender: chrome.runtime.MessageSender): P
     const instance = settings.instances.find(
       (item) => item.id === message.instanceId && item.enabled,
     );
-    if (!settings.enabled || !instance?.apiKey) return null;
+    if (!settings.enabled || !instance?.apiKey || !supportsMedia(instance.service, media.kind))
+      return null;
     const permitted = await chrome.permissions.contains({
       origins: [`${new URL(instance.baseUrl).origin}/*`],
     });
     if (!permitted) return null;
     try {
-      return (await findExistingDestination(instance, media))?.href ?? null;
+      const destination =
+        instance.service === "seerr"
+          ? await findSeerrDestination(instance, media)
+          : await findExistingDestination(instance, media);
+      return destination?.href ?? null;
     } catch {
       return null;
     }

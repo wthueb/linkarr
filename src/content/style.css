@@ -49,6 +49,9 @@ a:focus-visible {
 .sonarr {
   background: #88ccec;
 }
+.seerr {
+  background: #c4a0ef;
+}
 .icon img {
   position: absolute;
   inset: 0;

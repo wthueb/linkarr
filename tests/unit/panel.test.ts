@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PANEL_ID, renderPanel } from "../../src/content/panel";
 import { pageLinks } from "../../src/shared/links";
 import type { Media } from "../../src/shared/media";
-import { instance } from "./support";
+import { instance, seerr } from "./support";
 
 const media: Media = { kind: "movie", title: "<img src=x onerror=alert(1)>", ids: { tmdb: "123" } };
 const settings = {
@@ -117,6 +117,57 @@ describe("instant inline links", () => {
     expect(old?.isConnected).toBe(false);
     expect(old?.href).toContain("/add/new?term=");
     expect(anchors()[0]?.href).toContain("/add/new?term=");
+  });
+  it.each(["movie", "series"] as const)(
+    "renders Seerr beside %s links immediately and upgrades independently",
+    async (kind) => {
+      const current: Media = { kind, title: "A title", ids: { imdb: "tt1234567" } };
+      const resolve = vi.fn((id: string) =>
+        id === seerr.id
+          ? Promise.resolve(`${seerr.baseUrl}/${kind === "movie" ? "movie" : "tv"}/123`)
+          : new Promise<string | null>(() => undefined),
+      );
+      renderPanel(
+        document,
+        pageLinks({ ...settings, instances: [...settings.instances, seerr] }, current),
+        current,
+        resolve,
+        title,
+      );
+      const buttons = anchors();
+      const button = buttons.at(-1);
+      expect(button?.href).toBe(`${seerr.baseUrl}/search?query=imdb%3Att1234567`);
+      expect(button?.getAttribute("aria-label")).toBe("Seerr");
+      expect(button?.querySelector(".icon.seerr")?.textContent).toBe("E");
+      expect(button?.target).toBe("_blank");
+      expect(button?.rel).toBe("noopener noreferrer");
+      expect(button?.parentElement?.getAttribute("aria-label")).toContain("Seerr");
+      expect(buttons).toHaveLength(kind === "movie" ? 3 : 2);
+      await vi.waitFor(() =>
+        expect(button?.href).toBe(`${seerr.baseUrl}/${kind === "movie" ? "movie" : "tv"}/123`),
+      );
+      expect(buttons[0]?.href).toContain("/add/new?term=");
+    },
+  );
+  it("retains Seerr custom icons and ignores stale Seerr resolution", async () => {
+    let finish: (url: string) => void = () => undefined;
+    const pending = new Promise<string>((resolve) => {
+      finish = resolve;
+    });
+    const current = { ...media, ids: {} };
+    const data = "data:image/png;base64,AAAA";
+    const seerrLinks = pageLinks(
+      { ...settings, instances: [{ ...seerr, iconData: data }] },
+      current,
+    );
+    renderPanel(document, seerrLinks, current, () => pending, title);
+    const old = anchors()[0];
+    expect(old?.querySelector("img")?.src).toBe(data);
+    renderPanel(document, seerrLinks, current, async () => null, title);
+    finish(`${seerr.baseUrl}/movie/123`);
+    await Promise.resolve();
+    expect(old?.isConnected).toBe(false);
+    expect(anchors()[0]?.href).toContain("/search?query=");
   });
   it("does not fall back to a floating panel when the title is missing", () => {
     renderPanel(document, links, media, vi.fn(), null);

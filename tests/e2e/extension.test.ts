@@ -19,6 +19,9 @@ let extensionId: string;
 let origin: string;
 let server: Server;
 let library: unknown[] = [];
+let seerrResults: unknown[] = [];
+let seerrStatus = 200;
+let seerrServerStatus: unknown = { version: "3.0.0", commitTag: "local" };
 let apiStatus = 200;
 let networkFailure = false;
 let invalidJson = false;
@@ -80,6 +83,28 @@ async function configure(patches: (Partial<Instance> & { id: string })[]): Promi
   }, patches);
 }
 
+async function addSeerr(patch: Partial<Instance> = {}): Promise<void> {
+  await worker.evaluate(
+    async ({ baseUrl, updates }) => {
+      const stored = await chrome.storage.local.get("linkarr.settings");
+      const settings = stored["linkarr.settings"] as Settings;
+      settings.instances.push({
+        id: "seerr",
+        name: "Seerr",
+        service: "seerr",
+        baseUrl: `${baseUrl}/seerr`,
+        apiKey: "seerr-test-key",
+        enabled: true,
+        iconUrl: "",
+        iconData: "",
+        ...updates,
+      });
+      await chrome.storage.local.set({ "linkarr.settings": settings });
+    },
+    { baseUrl: origin, updates: patch },
+  );
+}
+
 async function openLink(page: Page, name: string): Promise<Page> {
   const opened = context.waitForEvent("page");
   await page.getByRole("link", { name, exact: true }).click();
@@ -102,17 +127,41 @@ test.beforeAll(async () => {
       return;
     }
     response.setHeader("Content-Type", "application/json");
-    if (!path.includes("/api/v3/")) {
+    if (path === "/seerr/api/v1/") {
+      response.statusCode = 404;
+      response.end(JSON.stringify({ message: "not found" }));
+      return;
+    }
+    const isSeerr = path.includes("/api/v1/");
+    if (!isSeerr && !path.includes("/api/v3/")) {
       response.end("{}");
       return;
     }
     const wait = path.startsWith(gatePrefix) ? gate : null;
-    const status = apiStatus;
+    const status = isSeerr
+      ? !path.endsWith("/api/v1/status") && request.headers["x-api-key"] !== "seerr-test-key"
+        ? 403
+        : seerrStatus
+      : apiStatus;
     const fail = networkFailure;
+    if (isSeerr && status === 302) response.setHeader("Location", `${origin}/redirect-target`);
     const body = invalidJson
       ? "<html>Sign in</html>"
       : JSON.stringify(
-          path.endsWith("system/status") ? { appName: "Radarr", version: "5.0.0" } : library,
+          isSeerr
+            ? path.endsWith("/api/v1/status")
+              ? seerrServerStatus
+              : path.endsWith("/auth/me")
+                ? { id: 1, displayName: "Local test user" }
+                : {
+                    page: 1,
+                    totalPages: 1,
+                    totalResults: seerrResults.length,
+                    results: seerrResults,
+                  }
+            : path.endsWith("system/status")
+              ? { appName: "Radarr", version: "5.0.0" }
+              : library,
         );
     void (async () => {
       if (wait) await wait;
@@ -190,6 +239,9 @@ test.afterAll(async () => {
 
 test.beforeEach(async () => {
   library = [];
+  seerrResults = [];
+  seerrStatus = 200;
+  seerrServerStatus = { version: "3.0.0", commitTag: "local" };
   apiStatus = 200;
   networkFailure = false;
   invalidJson = false;
@@ -540,4 +592,249 @@ test("saves optional API keys and provides explicit connection diagnostics", asy
   await expect(page.locator(".instance-card").first().getByLabel("API key (optional)")).toHaveValue(
     "",
   );
+});
+
+test("renders Seerr immediately beside HD/4K links and resolves without delaying Arr", async () => {
+  await addSeerr();
+  library = [existingMovie];
+  seerrResults = [{ id: 329865, mediaType: "movie", title: "Arrival" }];
+  holdApi("/seerr/");
+  const page = await context.newPage();
+  await page.goto(movieUrl);
+  const seerr = page.getByRole("link", { name: "Seerr", exact: true });
+  await expect(seerr).toHaveAttribute("href", `${origin}/seerr/search?query=imdb%3Att2543164`);
+  await expect(seerr.locator(".icon.seerr")).toHaveText("E");
+  await expect(page.getByRole("link", { name: "Movies HD", exact: true })).toHaveAttribute(
+    "href",
+    `${origin}/radarr/movie/arrival-329865`,
+  );
+  await expect(page.locator("#linkarr-panel .actions a")).toHaveCount(3);
+  await expect
+    .poll(() => requests.some((item) => item.path.startsWith("/seerr/api/v1/search?")))
+    .toBe(true);
+  release();
+  await expect(seerr).toHaveAttribute("href", `${origin}/seerr/movie/329865`);
+  const destination = await openLink(page, "Seerr");
+  await expect(destination).toHaveURL(`${origin}/seerr/movie/329865`);
+  expect(requests.find((item) => item.path.startsWith("/seerr/api/v1/search?"))?.key).toBe(
+    "seerr-test-key",
+  );
+});
+
+for (const media of [
+  { route: "movie/329865-arrival", destination: "movie/329865" },
+  { route: "tv/1396-breaking-bad", destination: "tv/1396" },
+]) {
+  test(`opens native Seerr ${media.destination} links without API traffic`, async () => {
+    await addSeerr();
+    const page = await context.newPage();
+    await page.goto(`https://www.themoviedb.org/${media.route}`);
+    const seerr = page.getByRole("link", { name: "Seerr", exact: true });
+    await expect(seerr).toHaveAttribute("href", `${origin}/seerr/${media.destination}`);
+    const destination = await openLink(page, "Seerr");
+    await expect(destination).toHaveURL(`${origin}/seerr/${media.destination}`);
+    expect(requests.some((item) => item.path.includes("/api/v1/"))).toBe(false);
+  });
+}
+
+test("resolves TVDB series IDs to Seerr TV pages", async () => {
+  await addSeerr();
+  seerrResults = [{ id: 1396, mediaType: "tv", name: "Breaking Bad" }];
+  holdApi("/seerr/");
+  const page = await context.newPage();
+  const url = "https://www.thetvdb.com/series/breaking-bad";
+  await page.route(url, (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: sitePage("www.thetvdb.com", true).replace(
+        ',"sameAs":["https://www.imdb.com/title/tt0903747/"]',
+        "",
+      ),
+    }),
+  );
+  await page.goto(url);
+  const seerr = page.getByRole("link", { name: "Seerr", exact: true });
+  await expect(seerr).toHaveAttribute("href", `${origin}/seerr/search?query=tvdb%3A81189`);
+  await expect(page.getByRole("link", { name: "Movies HD", exact: true })).toHaveCount(0);
+  release();
+  await expect(seerr).toHaveAttribute("href", `${origin}/seerr/tv/1396`);
+  expect(
+    requests.some((item) => item.path === "/seerr/api/v1/search?query=tvdb%3A81189&page=1"),
+  ).toBe(true);
+});
+
+test("retains working Seerr links without a key or host permission", async () => {
+  await addSeerr({ apiKey: "" });
+  const page = await context.newPage();
+  await page.goto(movieUrl);
+  const destination = await openLink(page, "Seerr");
+  await expect(destination).toHaveURL(`${origin}/seerr/search?query=imdb%3Att2543164`);
+  expect(requests.some((item) => item.path.includes("/api/v1/"))).toBe(false);
+  const ungranted = origin.replace("127.0.0.1", "localhost");
+  await configure([{ id: "seerr", apiKey: "seerr-test-key", baseUrl: `${ungranted}/seerr` }]);
+  expect(
+    await worker.evaluate(
+      (url) => chrome.permissions.contains({ origins: [`${url}/*`] }),
+      ungranted,
+    ),
+  ).toBe(false);
+  await expect(page.getByRole("link", { name: "Seerr", exact: true })).toHaveAttribute(
+    "href",
+    `${ungranted}/seerr/search?query=imdb%3Att2543164`,
+  );
+  expect(requests.some((item) => item.path.includes("/api/v1/"))).toBe(false);
+});
+
+for (const status of [302, 403, 500]) {
+  test(`keeps Seerr searches usable on HTTP ${status} while Arr resolves`, async () => {
+    await addSeerr();
+    library = [existingMovie];
+    seerrStatus = status;
+    const page = await context.newPage();
+    await page.goto(movieUrl);
+    await expect
+      .poll(() => completed.some((path) => path.startsWith("/seerr/api/v1/search?")))
+      .toBe(true);
+    await expect(page.getByRole("link", { name: "Movies HD", exact: true })).toHaveAttribute(
+      "href",
+      `${origin}/radarr/movie/arrival-329865`,
+    );
+    await expect(page.getByRole("link", { name: "Seerr", exact: true })).toHaveAttribute(
+      "href",
+      `${origin}/seerr/search?query=imdb%3Att2543164`,
+    );
+    expect(requests.some((item) => item.path === "/redirect-target")).toBe(false);
+  });
+}
+
+test("Seerr resolves independently when Arr fails", async () => {
+  await addSeerr();
+  apiStatus = 500;
+  seerrResults = [{ id: 329865, mediaType: "movie" }];
+  const page = await context.newPage();
+  await page.goto(movieUrl);
+  await expect(page.getByRole("link", { name: "Seerr", exact: true })).toHaveAttribute(
+    "href",
+    `${origin}/seerr/movie/329865`,
+  );
+  await expect(page.getByRole("link", { name: "Movies HD", exact: true })).toHaveAttribute(
+    "href",
+    `${origin}/radarr/add/new?term=imdb%3Att2543164`,
+  );
+});
+
+test("Seerr ambiguity leaves the exact external-ID search intact", async () => {
+  await addSeerr();
+  seerrResults = [
+    { id: 329865, mediaType: "movie" },
+    { id: 999, mediaType: "movie" },
+  ];
+  const page = await context.newPage();
+  await page.goto(movieUrl);
+  await expect
+    .poll(() => completed.some((path) => path.startsWith("/seerr/api/v1/search?")))
+    .toBe(true);
+  const destination = await openLink(page, "Seerr");
+  await expect(destination).toHaveURL(`${origin}/seerr/search?query=imdb%3Att2543164`);
+  expect(requests.filter((item) => item.path.startsWith("/seerr/api/v1/search?"))).toHaveLength(1);
+});
+
+test("keeps Seerr keys private and removes links when the instance is disabled", async () => {
+  await addSeerr();
+  const page = await context.newPage();
+  await page.goto(movieUrl);
+  await expect(page.getByRole("link", { name: "Seerr", exact: true })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-storage-accessible", "false");
+  await expect(page.locator("html")).toHaveAttribute("data-public-settings", /Seerr/);
+  const publicData = await page.locator("html").getAttribute("data-public-settings");
+  expect(publicData).not.toContain("seerr-test-key");
+  expect(publicData).not.toContain(origin);
+  expect(await page.content()).not.toContain("seerr-test-key");
+  expect(requests.some((item) => item.path.includes("seerr-test-key"))).toBe(false);
+  await configure([{ id: "seerr", enabled: false }]);
+  await expect(page.getByRole("link", { name: "Seerr", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Movies HD", exact: true })).toBeVisible();
+});
+
+test("configures Seerr, tests API-key authentication, and persists its popup shortcut", async () => {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/options.html`);
+  await page.getByRole("button", { name: "+ Add instance" }).click();
+  const card = page.locator(".instance-card").last();
+  await card.getByRole("combobox", { name: /^Service/ }).selectOption("seerr");
+  await card.getByLabel("Display name").fill("Requests");
+  await card.getByLabel("Instance URL").fill(`${origin}/seerr`);
+  await expect(card.locator(".instance-preview")).toHaveText("E");
+  await expect(card.locator(".api-key-hint")).toContainText("Seerr Settings → General");
+  await card.getByLabel("API key (optional)").fill("wrong-test-key");
+  await card.getByRole("button", { name: "Test connection" }).click();
+  await expect(card.getByRole("status")).toContainText("access denied");
+  await card.getByLabel("API key (optional)").fill("seerr-test-key");
+  seerrServerStatus = { appName: "Radarr", version: "5.0.0" };
+  await card.getByRole("button", { name: "Test connection" }).click();
+  await expect(card.getByRole("status")).toContainText("not the selected Seerr service");
+  seerrServerStatus = { version: "3.0.0", commitTag: "local" };
+  await card.getByRole("button", { name: "Test connection" }).click();
+  await expect(card.getByRole("status")).toContainText("Connected · Seerr");
+  expect(requests.some((item) => item.path === "/seerr/api/v1/")).toBe(false);
+  expect(requests.some((item) => item.path === "/seerr/api/v1/status")).toBe(true);
+  expect(requests.some((item) => item.path === "/seerr/api/v1/auth/me")).toBe(true);
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await expect(page.locator("#status")).toContainText("Settings saved");
+  await page.reload();
+  const saved = page.locator(".instance-card").last();
+  await expect(saved.getByRole("combobox", { name: /^Service/ })).toHaveValue("seerr");
+  await expect(saved.getByLabel("Display name")).toHaveValue("Requests");
+  await expect(saved.getByLabel("API key (optional)")).toHaveValue("seerr-test-key");
+  await expect(page.locator(".instance-card")).toHaveCount(4);
+  await page.goto(`chrome-extension://${extensionId}/popup.html`);
+  await expect(page.getByRole("link", { name: "Requests", exact: true })).toHaveAttribute(
+    "href",
+    `${origin}/seerr`,
+  );
+});
+
+test("resolves a title-only MDBList page through an exact Seerr title/year search", async () => {
+  await addSeerr();
+  seerrResults = [
+    { id: 1, mediaType: "movie", title: "Arrival", releaseDate: "1996-01-01" },
+    { id: 329865, mediaType: "movie", title: "Arrival", releaseDate: "2016-11-10" },
+  ];
+  holdApi("/seerr/");
+  const page = await context.newPage();
+  await page.goto("https://mdblist.com/movie/abc-arrival");
+  const seerr = page.getByRole("link", { name: "Seerr", exact: true });
+  await expect(seerr).toHaveAttribute("href", `${origin}/seerr/search?query=Arrival`);
+  release();
+  await expect(seerr).toHaveAttribute("href", `${origin}/seerr/movie/329865`);
+  expect(requests.some((item) => item.path === "/seerr/api/v1/search?query=Arrival&page=1")).toBe(
+    true,
+  );
+});
+
+test("ignores a previous title's delayed Seerr response after in-page navigation", async () => {
+  await addSeerr();
+  seerrResults = [{ id: 329865, mediaType: "movie" }];
+  holdApi("/seerr/");
+  const page = await context.newPage();
+  await page.goto(movieUrl);
+  await expect
+    .poll(() => requests.some((item) => item.path.includes("query=imdb%3Att2543164")))
+    .toBe(true);
+  seerrResults = [{ id: 1396, mediaType: "tv" }];
+  await page.evaluate((html) => {
+    history.pushState({}, "", "/title/tt0903747/");
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+    document.head.replaceChildren(...parsed.head.childNodes);
+    document.body.replaceChildren(...parsed.body.childNodes);
+  }, seriesPage);
+  const seerr = page.getByRole("link", { name: "Seerr", exact: true });
+  await expect(seerr).toHaveAttribute("href", `${origin}/seerr/search?query=imdb%3Att0903747`);
+  await expect
+    .poll(() => requests.some((item) => item.path.includes("query=imdb%3Att0903747")))
+    .toBe(true);
+  release();
+  await expect(seerr).toHaveAttribute("href", `${origin}/seerr/tv/1396`);
+  await expect(page.getByRole("link", { name: "Movies HD", exact: true })).toHaveCount(0);
+  await expect(page.locator("#linkarr-panel")).toHaveCount(1);
 });

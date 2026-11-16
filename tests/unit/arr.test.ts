@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { api, findExistingDestination } from "../../src/background/arr";
 import type { Media } from "../../src/shared/media";
-import { instance } from "./support";
+import { instance, seerr } from "./support";
 
 const movie: Media = { kind: "movie", title: "Arrival", ids: { tmdb: "329865" }, year: 2016 };
 const series: Media = { kind: "series", title: "Breaking Bad", ids: { tvdb: "81189" } };
@@ -122,6 +122,13 @@ describe("background library checks", () => {
       await expect(findExistingDestination(instance, movie, fetcher)).rejects.toThrow();
     },
   );
+  it("rejects Seerr instances rather than calling Arr endpoints", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    await expect(api(seerr, "movie", fetcher)).rejects.toThrow(/Seerr API/);
+    await expect(findExistingDestination(seerr, movie, fetcher)).rejects.toThrow(/media type/);
+    await expect(findExistingDestination(seerr, series, fetcher)).rejects.toThrow(/media type/);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it("does not leak API keys through network or response errors", async () => {
     const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error(instance.apiKey));
     await expect(api(instance, "movie", fetcher)).rejects.toThrow(/connection failed/);

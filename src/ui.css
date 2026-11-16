@@ -181,6 +181,9 @@ input[type="checkbox"] {
 .instance-preview[data-service="sonarr"] {
   background: #88ccec;
 }
+.instance-preview[data-service="seerr"] {
+  background: #c4a0ef;
+}
 .instance-preview img {
   width: 32px;
   height: 32px;

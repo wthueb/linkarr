@@ -1,4 +1,4 @@
-export type Service = "radarr" | "sonarr";
+export type Service = "radarr" | "sonarr" | "seerr";
 
 export interface Instance {
   id: string;
@@ -76,7 +76,8 @@ export function parseSettings(value: unknown): Settings {
     if (!/^[\w-]+$/.test(id) || ids.has(id)) throw new Error("Instance IDs must be unique.");
     ids.add(id);
     if (!name) throw new Error("Every instance needs a name.");
-    if (raw.service !== "radarr" && raw.service !== "sonarr") throw new Error("Invalid service.");
+    if (raw.service !== "radarr" && raw.service !== "sonarr" && raw.service !== "seerr")
+      throw new Error("Invalid service.");
     if (typeof raw.enabled !== "boolean") throw new Error("Invalid enabled setting.");
     const apiKey = raw.apiKey === undefined ? "" : string(raw.apiKey, "API key", 256);
     if (/\s/.test(apiKey)) throw new Error(`${name}: enter an API key without whitespace.`);

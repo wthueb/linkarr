@@ -16,8 +16,8 @@
         <p class="eyebrow">YOUR LIBRARIES, ONE CLICK AWAY</p>
         <h1>A place for every version.</h1>
         <p class="intro">
-          Connect your Radarr and Sonarr instances. Open titles you already
-          have, or find the ones you don’t.
+          Connect your Radarr, Sonarr, and Seerr instances. Open titles you
+          already have, or find the ones you don’t.
         </p>
       </header>
       <form id="settings-form">
@@ -41,8 +41,8 @@
         </div>
         <div id="instances"></div>
         <p id="empty" class="empty">
-          No instances yet. Add your first Radarr or Sonarr connection to get
-          started.
+          No instances yet. Add your first Radarr, Sonarr, or Seerr connection
+          to get started.
         </p>
         <footer class="save-bar">
           <p id="status" role="status" aria-live="polite">
@@ -55,11 +55,11 @@
         <h2>Just your browser and your servers.</h2>
         <p>
           API keys stay in the extension’s local storage and are never sent to
-          content pages. Linkarr only reads your libraries; it never adds,
-          downloads, plays, or deletes media. A click opens the existing title’s
-          detail page or the add screen in a new tab. Links work immediately
-          without an API key; with a key, library checks quietly update links in
-          the background.
+          content pages. Linkarr only reads data; it never adds, requests,
+          downloads, plays, or deletes media. A click opens a title’s detail
+          page or an add/search screen in a new tab. Links work immediately
+          without an API key; with a key, background lookups quietly update
+          links to existing Arr titles or exact Seerr title pages.
         </p>
         <p>
           Access is requested only for the server origins you configure. Custom
@@ -103,6 +103,7 @@
             >Service<select name="service">
               <option value="radarr">Radarr · Movies</option>
               <option value="sonarr">Sonarr · TV shows</option>
+              <option value="seerr">Seerr · Movies &amp; TV</option>
             </select></label
           >
           <label class="wide"
@@ -125,7 +126,7 @@
               maxlength="256"
               autocomplete="off"
               spellcheck="false"
-            /><span class="hint"
+            /><span class="hint api-key-hint"
               >Enables automatic links to existing titles. Leave blank for
               add/search links only. Find it under Settings → General →
               Security.</span

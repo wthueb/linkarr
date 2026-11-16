@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Chrome MV3 links from movie and TV pages to your Radarr and Sonarr libraries.",
+  "description": "Chrome MV3 links from movie and TV pages to Radarr, Sonarr, and Seerr.",
   "type": "module",
   "packageManager": "pnpm@10.34.7",
   "engines": {

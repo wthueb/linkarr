@@ -52,7 +52,7 @@ try {
   }
   statusText.textContent = settings.instances.length
     ? "Visit a movie or show on IMDb, TMDB, TVDB, or MDBList."
-    : "Add a Radarr or Sonarr instance to get started.";
+    : "Add a Radarr, Sonarr, or Seerr instance to get started.";
 } catch (error) {
   statusText.textContent = errorMessage(error);
 }

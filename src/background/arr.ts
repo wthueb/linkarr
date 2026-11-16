@@ -1,47 +1,17 @@
-import type { Media } from "../shared/media";
+import { type Media, normalizedTitle } from "../shared/media";
+import { supportsMedia } from "../shared/services";
 import { type Instance, isRecord } from "../shared/settings";
+import { type Fetcher, instanceUrl, jsonApi } from "./http";
 
-export type Fetcher = typeof fetch;
 export type ArrItem = Record<string, unknown>;
-
-export function instanceUrl(instance: Instance, path: string): URL {
-  return new URL(`${instance.baseUrl}/${path}`);
-}
 
 export async function api(
   instance: Instance,
   path: string,
   fetcher: Fetcher = fetch,
 ): Promise<unknown> {
-  if (!instance.apiKey) throw new Error(`${instance.name}: configure an API key to use the API.`);
-  let response: Response;
-  try {
-    response = await fetcher(instanceUrl(instance, `api/v3/${path}`), {
-      headers: { "X-Api-Key": instance.apiKey, Accept: "application/json" },
-      credentials: "omit",
-      redirect: "error",
-      cache: "no-store",
-      signal: AbortSignal.timeout(12000),
-    });
-  } catch {
-    throw new Error(
-      `${instance.name}: connection failed. Check the URL, host permission, TLS certificate, and network access. Redirects are not followed.`,
-    );
-  }
-  if (!response.ok) {
-    if ([401, 403].includes(response.status))
-      throw new Error(
-        `${instance.name}: access denied. Check the API key and any reverse-proxy authentication.`,
-      );
-    throw new Error(`${instance.name}: API returned HTTP ${response.status}.`);
-  }
-  try {
-    return await response.json();
-  } catch {
-    throw new Error(
-      `${instance.name}: expected JSON from the API. Check the instance URL and proxy configuration.`,
-    );
-  }
+  if (instance.service === "seerr") throw new Error("Use the Seerr API for this instance.");
+  return jsonApi(instance, `api/v3/${path}`, fetcher);
 }
 
 function items(value: unknown): ArrItem[] {
@@ -65,21 +35,12 @@ function matchId(item: ArrItem, media: Media, service: Instance["service"]): boo
   return Boolean(media.ids.imdb && item.imdbId === media.ids.imdb);
 }
 
-function normalizedTitle(value: unknown): string {
-  return typeof value === "string"
-    ? value
-        .normalize("NFKC")
-        .toLocaleLowerCase("en-US")
-        .replace(/[^\p{L}\p{N}]/gu, "")
-    : "";
-}
-
 export async function findExistingDestination(
   instance: Instance,
   input: Media,
   fetcher: Fetcher = fetch,
 ): Promise<URL | null> {
-  if ((instance.service === "radarr") !== (input.kind === "movie"))
+  if (instance.service === "seerr" || !supportsMedia(instance.service, input.kind))
     throw new Error("This instance does not handle this media type.");
   if (!instance.apiKey) return null;
   let media: Media = { ...input, ids: { ...input.ids } };

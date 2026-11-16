@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addDestination, pageLinks } from "../../src/shared/links";
 import type { Media } from "../../src/shared/media";
-import { instance } from "./support";
+import { instance, seerr } from "./support";
 
 const movie: Media = {
   kind: "movie",
@@ -57,6 +57,63 @@ describe("immediate navigation URLs", () => {
     const serialized = JSON.stringify(links);
     expect(serialized).not.toContain(instance.apiKey);
     expect(serialized).not.toMatch(/"(apiKey|baseUrl|iconUrl)"/);
+  });
+  it("builds immediate Seerr movie and TV detail links from TMDB IDs", () => {
+    expect(addDestination(seerr, movie).href).toBe(`${seerr.baseUrl}/movie/329865`);
+    expect(
+      addDestination(seerr, { kind: "series", title: "Breaking Bad", ids: { tmdb: "1396" } }).href,
+    ).toBe(`${seerr.baseUrl}/tv/1396`);
+  });
+  it("prefers IMDb then TVDB series IDs for Seerr searches, never treating TVDB as TMDB", () => {
+    const series: Media = {
+      kind: "series",
+      title: "Breaking Bad",
+      ids: { imdb: "tt0903747", tvdb: "81189" },
+    };
+    expect(addDestination(seerr, series).searchParams.get("query")).toBe("imdb:tt0903747");
+    expect(addDestination(seerr, { ...series, ids: { tvdb: "81189" } }).href).toBe(
+      `${seerr.baseUrl}/search?query=tvdb%3A81189`,
+    );
+    expect(
+      addDestination(seerr, { ...movie, ids: { imdb: "tt2543164" } }).searchParams.get("query"),
+    ).toBe("imdb:tt2543164");
+    expect(
+      addDestination(seerr, {
+        ...movie,
+        title: "A & B / C?",
+        ids: { tvdb: "81189" },
+      }).searchParams.get("query"),
+    ).toBe("A & B / C?");
+  });
+  it("shows Seerr for both media kinds in saved order, skipping unnecessary resolution", () => {
+    const settings = {
+      version: 1 as const,
+      enabled: true,
+      instances: [
+        instance,
+        seerr,
+        { ...instance, id: "4k" },
+        sonarr,
+        { ...seerr, id: "disabled", enabled: false },
+      ],
+    };
+    const movies = pageLinks(settings, movie).instances;
+    expect(movies.map((item) => item.id)).toEqual([instance.id, seerr.id, "4k"]);
+    expect(movies.map((item) => item.checkLibrary)).toEqual([true, false, true]);
+    const shows = pageLinks(settings, {
+      kind: "series",
+      title: "Breaking Bad",
+      ids: { tvdb: "81189" },
+    }).instances;
+    expect(shows.map((item) => item.id)).toEqual([seerr.id, sonarr.id]);
+    expect(shows.map((item) => item.checkLibrary)).toEqual([true, true]);
+    const serialized = JSON.stringify(shows);
+    expect(serialized).not.toContain(seerr.apiKey);
+    expect(serialized).not.toMatch(/"(apiKey|baseUrl|iconUrl)"/);
+    expect(
+      pageLinks({ ...settings, instances: [{ ...seerr, apiKey: "" }] }, { ...movie, ids: {} })
+        .instances[0]?.checkLibrary,
+    ).toBe(false);
   });
   it("does not expose links when the extension is disabled", () => {
     expect(

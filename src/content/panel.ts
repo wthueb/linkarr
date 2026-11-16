@@ -1,5 +1,6 @@
 import type { PageLinks } from "../shared/links";
 import type { Media } from "../shared/media";
+import { SERVICE_BADGES, supportsMedia } from "../shared/services";
 import styles from "./style.css?inline";
 
 export const PANEL_ID = "linkarr-panel";
@@ -14,7 +15,7 @@ export function renderPanel(
   doc.getElementById(PANEL_ID)?.remove();
   if (!settings.enabled || !media || !title) return null;
   const instances = settings.instances.filter(
-    (instance) => instance.enabled && (instance.service === "radarr") === (media.kind === "movie"),
+    (instance) => instance.enabled && supportsMedia(instance.service, media.kind),
   );
   if (!instances.length) return null;
   const host = doc.createElement("span");
@@ -26,7 +27,7 @@ export function renderPanel(
   const actions = doc.createElement("span");
   actions.className = "actions";
   actions.setAttribute("role", "group");
-  actions.setAttribute("aria-label", "Open in Radarr or Sonarr");
+  actions.setAttribute("aria-label", "Open in Radarr, Sonarr, or Seerr");
   const checks: (() => void)[] = [];
   for (const instance of instances) {
     const button = doc.createElement("a");
@@ -38,7 +39,7 @@ export function renderPanel(
     const icon = doc.createElement("span");
     icon.className = `icon ${instance.service}`;
     icon.setAttribute("aria-hidden", "true");
-    icon.textContent = instance.service === "radarr" ? "R" : "S";
+    icon.textContent = SERVICE_BADGES[instance.service];
     if (instance.iconData) {
       const image = doc.createElement("img");
       image.src = instance.iconData;

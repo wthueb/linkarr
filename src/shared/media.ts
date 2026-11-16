@@ -42,6 +42,15 @@ export function parseMedia(value: unknown): Media {
   return media;
 }
 
+export function normalizedTitle(value: unknown): string {
+  return typeof value === "string"
+    ? value
+        .normalize("NFKC")
+        .toLocaleLowerCase("en-US")
+        .replace(/[^\p{L}\p{N}]/gu, "")
+    : "";
+}
+
 export function supportedPage(url: URL): boolean {
   const host = url.hostname.replace(/^(www\.|m\.)/, "");
   return (

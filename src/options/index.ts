@@ -1,11 +1,13 @@
 import "../ui.css";
 import { errorMessage, request } from "../shared/messages";
+import { SERVICE_BADGES } from "../shared/services";
 import {
   type Instance,
   loadSettings,
   MAX_INSTANCES,
   parseSettings,
   type Settings,
+  type Service,
   saveSettings,
 } from "../shared/settings";
 import { cacheIcon } from "./icons";
@@ -39,13 +41,17 @@ function updateList(): void {
 }
 
 function preview(card: HTMLElement): void {
-  const service = element<HTMLSelectElement>('[name="service"]', card).value;
+  const service = element<HTMLSelectElement>('[name="service"]', card).value as Service;
   const name = input(card, "name").value.trim() || "New instance";
   element(".card-title", card).textContent = name;
   element("legend", card).textContent = name;
   const icon = element<HTMLElement>(".instance-preview", card);
-  icon.textContent = service === "radarr" ? "R" : "S";
+  icon.textContent = SERVICE_BADGES[service];
   icon.dataset.service = service;
+  element(".api-key-hint", card).textContent =
+    service === "seerr"
+      ? "Enables exact title links from IMDb/TVDB IDs or an unambiguous title/year search. Leave blank for immediate detail/search links. Find it under Seerr Settings → General. Linkarr never submits requests."
+      : "Enables automatic links to existing titles. Leave blank for add/search links only. Find it under Settings → General → Security.";
   if (card.dataset.iconData) {
     const img = document.createElement("img");
     img.src = card.dataset.iconData;

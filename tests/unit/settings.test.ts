@@ -6,7 +6,7 @@ import {
   parseSettings,
   publicSettings,
 } from "../../src/shared/settings";
-import { instance } from "./support";
+import { instance, seerr } from "./support";
 
 describe("settings validation", () => {
   it("starts with no instances", () => {
@@ -58,6 +58,28 @@ describe("settings validation", () => {
       ],
     });
     expect(parsed.instances).toHaveLength(3);
+  });
+  it("preserves mixed version-1 settings including Seerr order, icons, and optional keys", () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      instances: [
+        instance,
+        {
+          ...seerr,
+          iconUrl: "https://icons.test/seerr.png",
+          iconData: "data:image/png;base64,AAAA",
+        },
+        { ...seerr, id: "second", apiKey: "", enabled: false },
+      ],
+    };
+    expect(parseSettings(settings)).toEqual(settings);
+    const publicData = JSON.stringify(publicSettings(settings));
+    expect(publicData).not.toContain(seerr.apiKey);
+    expect(publicData).not.toContain(seerr.baseUrl);
+    expect(publicData).not.toContain("iconUrl");
+    expect(() =>
+      parseSettings({ ...DEFAULT_SETTINGS, instances: [{ ...seerr, service: "unknown" }] }),
+    ).toThrow(/Invalid service/);
   });
   it("never exposes API keys, private server URLs, or icon sources to content scripts", () => {
     const result = JSON.stringify(publicSettings({ ...DEFAULT_SETTINGS, instances: [instance] }));

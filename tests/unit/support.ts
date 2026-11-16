@@ -11,6 +11,14 @@ export const instance: Instance = {
   iconData: "",
 };
 
+export const seerr: Instance = {
+  ...instance,
+  id: "seerr",
+  name: "Seerr",
+  service: "seerr",
+  baseUrl: "https://seerr.example.test/requests",
+};
+
 export function page(html: string): Document {
   return new DOMParser().parseFromString(html, "text/html");
 }

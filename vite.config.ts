@@ -31,7 +31,7 @@ export default defineConfig(({ mode }) => {
                     name: "Linkarr",
                     version: pkg.version,
                     description:
-                      "Open movies and TV shows from IMDb, TMDB, TVDB, and MDBList in your Radarr and Sonarr libraries.",
+                      "Open movies and TV shows from IMDb, TMDB, TVDB, and MDBList in Radarr, Sonarr, and Seerr.",
                     minimum_chrome_version: "120",
                     permissions: ["storage"],
                     optional_host_permissions: ["http://*/*", "https://*/*"],
